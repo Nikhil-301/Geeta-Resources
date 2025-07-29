@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Bhagavad Gita Digital Library</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: The application is designed as an interactive, filterable gallery. The core structure consists of a main header, a primary navigation bar for filtering by broad categories (All, Commentaries, Languages), and a secondary filter bar that appears contextually. The main content area is a responsive grid of cards, each representing a PDF resource. This structure was chosen over a linear report format to empower users to instantly discover and access texts based on their specific interests (e.g., finding all Advaita commentaries or all Tamil translations) without overwhelming them with a long, static list. A data visualization section with charts provides a quick summary of the library's contents. This user-centered design prioritizes discoverability and ease of use. An additional section for LLM-powered insights allows users to directly query concepts or verses for simplified explanations. -->
+    <!-- Visualization & Content Choices: Report Info: List of PDF links categorized by commentary and language. -> Goal: Allow users to easily find and compare resources. -> Viz/Presentation Method: Interactive cards in a grid for individual resources, and bar charts for an overview. -> Interaction: Users click filter buttons (e.g., "Advaita", "Hindi") to dynamically show/hide the relevant resource cards. -> Justification: This interactive filtering is far more efficient for exploration than manual scrolling. The cards provide structured, digestible information for each PDF. The charts offer a high-level quantitative summary of the collection's scope. -> Library/Method: Vanilla JS for filtering logic, Chart.js for visualizations. -->
+    <!-- New LLM Feature: Report Info: Bhagavad Gita concepts/verses. -> Goal: Provide simplified, on-demand explanations. -> Viz/Presentation Method: Text input for query, button to trigger, text area for output. -> Interaction: User types query, clicks button, AI response appears. -> Justification: Directly addresses user need for understanding complex text. -> Library/Method: Gemini API (gemini-2.0-flash) via fetch API. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .nav-button.active {
+            background-color: #a16207;
+            color: #ffffff;
+            font-weight: 700;
+        }
+        .sub-nav-button.active {
+            background-color: #ca8a04;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body class="bg-amber-50 text-stone-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-amber-900 mb-2">Bhagavad Gita Digital Library</h1>
+            <p class="text-lg text-stone-600">An Interactive Archive of Sacred Texts, Commentaries, and Translations</p>
+        </header>
+
+        <main>
+            <section id="introduction" class="mb-12 bg-white/50 p-6 rounded-lg shadow-sm">
+                <h2 class="text-2xl font-bold text-amber-800 mb-4 text-center">Explore the Wisdom of the Gita</h2>
+                <p class="text-stone-700 text-center max-w-3xl mx-auto">
+                    This digital archive provides access to a curated collection of the Bhagavad Gita in various forms. The original text is a dialogue between Lord Krishna and Arjuna, offering profound insights into duty, action, and the nature of reality. This application organizes numerous translations and seminal commentaries from diverse philosophical schools. Use the filters below to navigate the collection by philosophical tradition or by language to discover the version that best suits your study.
+                </p>
+            </section>
+
+            <nav id="main-filters" class="flex justify-center space-x-2 md:space-x-4 mb-4">
+                <button data-main-filter="all" class="nav-button active text-lg px-6 py-2 rounded-full bg-amber-200 hover:bg-amber-300 transition-colors duration-300">All Resources</button>
+                <button data-main-filter="commentary" class="nav-button text-lg px-6 py-2 rounded-full bg-amber-200 hover:bg-amber-300 transition-colors duration-300">Commentaries</button>
+                <button data-main-filter="language" class="nav-button text-lg px-6 py-2 rounded-full bg-amber-200 hover:bg-amber-300 transition-colors duration-300">Languages</button>
+            </nav>
+
+            <div id="sub-filters-container" class="mb-8 text-center">
+                <!-- Sub-filters will be injected here by JS -->
+            </div>
+
+            <section id="visualizations" class="mb-12">
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white/60 p-4 rounded-lg shadow-sm">
+                        <h3 class="text-xl font-bold text-amber-800 mb-4 text-center">Resources by Philosophical School</h3>
+                        <div class="chart-container max-w-xl mx-auto">
+                            <canvas id="commentaryChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white/60 p-4 rounded-lg shadow-sm">
+                        <h3 class="text-xl font-bold text-amber-800 mb-4 text-center">Resources by Language</h3>
+                        <div class="chart-container max-w-xl mx-auto">
+                            <canvas id="languageChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="llm-insight" class="mb-12 bg-white/50 p-6 rounded-lg shadow-sm">
+                <h2 class="text-2xl font-bold text-amber-800 mb-4 text-center">✨ Get Gita Insight ✨</h2>
+                <p class="text-stone-700 text-center max-w-3xl mx-auto mb-6">
+                    Enter a Bhagavad Gita verse (e.g., "Chapter 2, Verse 47") or a concept (e.g., "Dharma") to receive a simplified explanation generated by AI.
+                </p>
+                <div class="max-w-xl mx-auto flex flex-col md:flex-row gap-4">
+                    <input type="text" id="gita-query-input" placeholder="e.g., Chapter 2, Verse 47 or Karma Yoga" class="flex-grow p-3 rounded-lg border border-amber-300 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none text-stone-700 bg-amber-50">
+                    <button id="get-insight-button" class="bg-amber-800 text-white font-bold py-3 px-6 rounded-lg hover:bg-amber-900 transition-colors duration-300 flex-shrink-0">
+                        Get Insight
+                    </button>
+                </div>
+                <div id="insight-output" class="mt-6 p-4 bg-amber-100 rounded-lg border border-amber-200 text-stone-700 min-h-[100px] flex items-center justify-center text-center">
+                    Type your query above and click 'Get Insight'.
+                </div>
+            </section>
+
+            <div id="resource-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Resource cards will be injected here by JS -->
+            </div>
+
+        </main>
+
+        <footer class="text-center mt-12 pt-8 border-t border-amber-200">
+            <p class="text-stone-500">Curated Digital Library | 2025</p>
+        </footer>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const resources = [
+                { title: 'Bhagavad-Gita As It Is (1972)', author: 'A.C. Bhaktivedanta Swami Prabhupada', description: 'The original, complete 1972 edition. Features Sanskrit, transliteration, word-for-word meanings, and extensive purports from the Gaudiya Vaishnava perspective.', category: 'commentary', language: 'english', school: 'gaudiya', link: 'https://archive.org/details/bhagavadgitaasitisoriginal1972edition' },
+                { title: 'Commentary of Sri Shankaracharya', author: 'Tr. Alladi Mahadeva Sastri', description: 'A high-quality 1977 edition featuring Sanskrit text with the English translation of Adi Shankara\'s seminal Advaita Vedanta commentary.', category: 'commentary', language: 'english', school: 'advaita', link: 'https://archive.org/download/Bhagavad-Gita.with.the.Commentary.of.Sri.Shankaracharya/Bhagavad-Gita.with.the.Commentary.of.Sri.Shankaracharya.pdf' },
+                { title: 'Commentary of Sri Shankaracharya', author: 'Tr. C.V. Ramachandra Aiyar', description: 'An excellent and lucid English translation of Shankara\'s famous commentary, providing deep philosophical and spiritual guidance.', category: 'commentary', language: 'english', school: 'advaita', link: 'https://www.spiritual-teaching.org/hindu-teachings/ewExternalFiles/Bhagavad%20Gita%20-%20comm%20Sankara%2C%20tr.%20Aiyar.pdf' },
+                { title: 'Gita Bhashya of Madhvacharya', author: 'Nagesh D. Sonde', description: 'An introductory account of the Gita interpretation according to the Dvaita philosophy as propounded by Sri Madhvacharya.', category: 'commentary', language: 'english', school: 'dvaita', link: 'https://archive.org/download/bhagavadgita_bhashya_and_tatparya_nirnaya_of_madhvacharya_-_nagesh_d_sonde/bhagavadgita_bhashya_and_tatparya_nirnaya_of_madhvacharya_-_nagesh_d_sonde.pdf' },
+                { title: 'The Bhagavad Gita (TTD Edition)', author: 'Tirumala Tirupati Devasthanams', description: 'A version significantly influenced by the Dvaita interpretation of Madhvacharya, presented for a modern audience.', category: 'commentary', language: 'english', school: 'dvaita', link: 'https://ebooks.tirumala.org/downloads/The%20Bhagavad%20Gita.pdf' },
+                { title: 'The Bhagvad Gita', author: 'Swami Nikhilananda', description: 'A 1944 scholarly translation with notes reflecting the Ramakrishna-Vivekananda tradition\'s universal spiritual principles.', category: 'commentary', language: 'english', school: 'other', link: 'https://archive.org/download/in.ernet.dli.2015.52403/2015.52403.The-Bhagvad-Gita-Translated-From-The-Sanskrit-With-Notes-Comment-And-Introduction.pdf' },
+                { title: 'The Bhagavad Gita', author: 'Swami Sivananda', description: 'A popular translation emphasizing practical spiritual life and the synthesis of various yogas for peace in daily activities.', category: 'commentary', language: 'english', school: 'other', link: 'https://earthspiritualist.ie/wp-content/uploads/BHAGAVAD-GITA-By-SRI-SWAMI-SIVANANDA.pdf' },
+                { title: 'Bhagavad Gita (Sanskrit)', author: 'Digital Library of India', description: 'An authoritative Sanskrit version sourced from the Digital Library of India, perfect for direct textual engagement.', category: 'language', language: 'sanskrit', school: 'none', link: 'https://archive.org/details/in.ernet.dli.2015.486953' },
+                { title: 'Large-Print Sanskrit Edition', author: 'Sanskrit Web', description: 'A highly readable edition with large Devanagari Sanskrit text and English transliteration, ideal for students.', category: 'language', language: 'sanskrit', school: 'none', link: 'http://www.sanskritweb.net/sansdocs/gita-big.pdf' },
+                { title: 'Sanskrit Shlokas Only', author: 'ISKCON Desire Tree', description: 'A concise PDF containing only the Sanskrit shlokas from the "As It Is" edition, without commentary.', category: 'language', language: 'sanskrit', school: 'none', link: 'https://ebooks.iskcondesiretree.com/pdf/00_-_More/Bhagavad_Gita_As_It_Is-Only_Shlokas.pdf' },
+                { title: 'Trilingual Gita (Sanskrit, Hindi, English)', author: 'Ashok Kaushik (IGNCA)', description: 'A valuable resource from the Archaeological Survey of India offering a side-by-side trilingual presentation for comparative study.', category: 'language', language: 'sanskrit', school: 'none', link: 'https://ignca.gov.in/Asi_data/279.pdf' },
+                { title: 'English Translation', author: 'Lars Martin Fosse', description: 'A translation focused on high accuracy and fidelity to the original Sanskrit, including a comprehensive glossary and index.', category: 'language', language: 'english', school: 'none', link: 'https://moon-soup.com/wp-content/uploads/2011/11/bhagavadgita.pdf' },
+                { title: 'Hindi Gita (Yoga Life)', author: 'Yoga Life', description: 'A complete Hindi translation of the Bhagavad Gita.', category: 'language', language: 'hindi', school: 'none', link: 'https://yogalife.co.in/wp-content/uploads/2017/04/Bhagavad-gita-hindi.pdf' },
+                { title: 'Yatharth Geeta (Bengali)', author: 'Swami Adgadanandji Maharaj', description: 'A popular Bengali translation and commentary.', category: 'language', language: 'bengali', school: 'none', link: 'https://yatharthgeeta.com/upload/books/yatharthgeeta/indian/Bengali.pdf' },
+                { title: 'Gita Pravaha (Bengali)', author: 'ISKCON Desire Tree', description: 'Chapter-wise PDF downloads of the Gita in Bengali.', category: 'language', language: 'bengali', school: 'none', link: 'https://ebooks.iskcondesiretree.com/index.php?q=f&f=%2Fpdf%2FGita_Pravaha-Bengali%2FBhagavad_Gita' },
+                { title: 'Tamil Gita', author: 'Swami Chidbhavananda', description: 'A well-regarded Tamil translation from the Ramakrishna Tapovanam.', category: 'language', language: 'tamil', school: 'none', link: 'https://estudantedavedanta.net/The-Gita_Chidbhavananda.pdf' },
+                { title: 'Telugu Gita', author: 'ISKCON Mangaluru', description: 'A.C. Bhaktivedanta Swami Prabhupada\'s translation in Telugu.', category: 'language', language: 'telugu', school: 'none', link: 'https://iskconmangaluru.com/wp-content/uploads/2021/04/Telugu-Bhagavad-gita-His-Divine-Grace-AC-Bhaktivedanta-Swami-Prabhupada.pdf' },
+                { title: 'Kannada Gita', author: 'SGS Gita Foundation', description: 'A complete version of the Srimad Bhagawad Geeta in Kannada.', category: 'language', language: 'kannada', school: 'none', link: 'https://www.sgsgitafoundation.org/assets/resources/SrimadBhagawadGeeta_Kannada.pdf' },
+                { title: 'Malayalam Gita', author: 'Internet Archive', description: 'A complete Malayalam text with translation.', category: 'language', language: 'malayalam', school: 'none', link: 'https://archive.org/details/BhagavadGitaMalayalamTextWithTranslation' },
+                { title: 'Gujarati Gita', author: 'Scribd User Upload', description: 'A complete translation of the Bhagavad Gita in Gujarati script.', category: 'language', language: 'gujarati', school: 'none', link: 'https://www.scribd.com/doc/17576955/Bhagavad-Gita-in-Gujarati' },
+                { title: 'Marathi Gita', author: 'Internet Archive', description: 'Sartha Shrimad-bhagavad-gita with Marathi prose and verse translation.', category: 'language', language: 'marathi', school: 'none', link: 'https://archive.org/details/gita_marathi' },
+                { title: 'Yatharth Geeta (Punjabi)', author: 'Swami Adgadanand', description: 'The complete Srimad Bhagavad Gita in Punjabi.', category: 'language', language: 'punjabi', school: 'none', link: 'https://archive.org/details/YatharthGeetaPunjabi' },
+                { title: 'Odia Gita', author: 'Yatharth Geeta', description: 'The complete Srimad Bhagavad Gita in Odia.', category: 'language', language: 'odia', school: 'none', link: 'https://yatharthgeeta.com/upload/books/yatharthgeeta/indian/Oriya.pdf' }
+            ];
+
+            const grid = document.getElementById('resource-grid');
+            const mainFilters = document.getElementById('main-filters');
+            const subFiltersContainer = document.getElementById('sub-filters-container');
+            const gitaQueryInput = document.getElementById('gita-query-input');
+            const getInsightButton = document.getElementById('get-insight-button');
+            const insightOutput = document.getElementById('insight-output');
+
+            const commentarySchools = {
+                'advaita': 'Advaita Vedanta',
+                'vishishtadvaita': 'Vishishtadvaita',
+                'dvaita': 'Dvaita Vedanta',
+                'gaudiya': 'Gaudiya Vaishnavism',
+                'other': 'Other Traditions'
+            };
+
+            const languages = [...new Set(resources.filter(r => r.category === 'language').map(r => r.language))];
+
+            function createResourceCard(resource) {
+                return `
+                    <div class="resource-card bg-white rounded-lg shadow-md overflow-hidden transition-transform transform hover:-translate-y-1" data-category="${resource.category}" data-language="${resource.language}" data-school="${resource.school || 'none'}">
+                        <div class="p-6">
+                            <h3 class="text-xl font-bold text-amber-900 mb-2">${resource.title}</h3>
+                            <p class="text-sm font-medium text-yellow-700 mb-3">${resource.author}</p>
+                            <p class="text-stone-600 mb-4 h-24 overflow-auto">${resource.description}</p>
+                            <a href="${resource.link}" target="_blank" rel="noopener noreferrer" class="inline-block w-full text-center bg-amber-800 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-900 transition-colors duration-300">
+                                Access Resource <span>&#10142;</span>
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function renderGrid(items) {
+                grid.innerHTML = items.map(createResourceCard).join('');
+            }
+
+            function generateSubFilters(type) {
+                subFiltersContainer.innerHTML = '';
+                let filters = [];
+                if (type === 'commentary') {
+                    filters = Object.keys(commentarySchools);
+                } else if (type === 'language') {
+                    filters = languages;
+                }
+
+                if (filters.length > 0) {
+                    const subNav = document.createElement('div');
+                    subNav.className = 'flex flex-wrap justify-center gap-2';
+                    
+                    const allButton = document.createElement('button');
+                    allButton.textContent = 'All';
+                    allButton.className = 'sub-nav-button active px-4 py-1 rounded-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 transition-colors duration-200';
+                    allButton.dataset.subFilter = 'all';
+                    subNav.appendChild(allButton);
+
+                    filters.forEach(filter => {
+                        const button = document.createElement('button');
+                        button.textContent = commentarySchools[filter] || filter.charAt(0).toUpperCase() + filter.slice(1);
+                        button.className = 'sub-nav-button px-4 py-1 rounded-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 transition-colors duration-200';
+                        button.dataset.subFilter = filter;
+                        subNav.appendChild(button);
+                    });
+                    subFiltersContainer.appendChild(subNav);
+                }
+            }
+            
+            function filterResources(mainFilter, subFilter = 'all') {
+                document.querySelectorAll('.resource-card').forEach(card => {
+                    const matchesMain = mainFilter === 'all' || card.dataset.category === mainFilter;
+                    let matchesSub = false;
+                    if (mainFilter === 'commentary') {
+                        matchesSub = subFilter === 'all' || card.dataset.school === subFilter;
+                    } else if (mainFilter === 'language') {
+                        matchesSub = subFilter === 'all' || card.dataset.language === subFilter;
+                    } else {
+                        matchesSub = true; 
+                    }
+
+                    if (matchesMain && matchesSub) {
+                        card.classList.remove('hidden');
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                });
+            }
+
+            mainFilters.addEventListener('click', e => {
+                if (e.target.tagName === 'BUTTON') {
+                    const mainFilterValue = e.target.dataset.mainFilter;
+                    document.querySelectorAll('#main-filters .nav-button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    
+                    generateSubFilters(mainFilterValue);
+                    filterResources(mainFilterValue);
+                }
+            });
+
+            subFiltersContainer.addEventListener('click', e => {
+                if (e.target.tagName === 'BUTTON') {
+                    const subFilterValue = e.target.dataset.subFilter;
+                    const mainFilterValue = document.querySelector('#main-filters .nav-button.active').dataset.mainFilter;
+                    
+                    document.querySelectorAll('#sub-filters-container .sub-nav-button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+
+                    filterResources(mainFilterValue, subFilterValue);
+                }
+            });
+
+            function createChart(ctx, labels, data, chartLabel) {
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: chartLabel,
+                            data: data,
+                            backgroundColor: 'rgba(161, 98, 7, 0.6)',
+                            borderColor: 'rgba(161, 98, 7, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            }
+
+            function generateChartData() {
+                const commentaryCounts = {};
+                Object.keys(commentarySchools).forEach(school => commentaryCounts[school] = 0);
+                
+                const languageCounts = {};
+                languages.forEach(lang => languageCounts[lang] = 0);
+
+                resources.forEach(res => {
+                    if (res.category === 'commentary' && commentaryCounts.hasOwnProperty(res.school)) {
+                        commentaryCounts[res.school]++;
+                    }
+                    if (res.category === 'language' && languageCounts.hasOwnProperty(res.language)) {
+                        languageCounts[res.language]++;
+                    }
+                });
+                
+                const commentaryLabels = Object.values(commentarySchools);
+                const commentaryData = Object.values(commentaryCounts);
+                
+                const languageLabels = Object.keys(languageCounts).map(l => l.charAt(0).toUpperCase() + l.slice(1));
+                const languageData = Object.values(languageCounts);
+
+                createChart(document.getElementById('commentaryChart').getContext('2d'), commentaryLabels, commentaryData, '# of Resources');
+                createChart(document.getElementById('languageChart').getContext('2d'), languageLabels, languageData, '# of Resources');
+            }
+
+            getInsightButton.addEventListener('click', async () => {
+                const query = gitaQueryInput.value.trim();
+                if (!query) {
+                    insightOutput.innerHTML = '<p class="text-red-600">Please enter a verse or concept.</p>';
+                    return;
+                }
+
+                insightOutput.innerHTML = '<p class="text-stone-500">Generating insight... <span class="animate-pulse">●●●</span></p>';
+                getInsightButton.disabled = true;
+
+                try {
+                    const prompt = `Explain the Bhagavad Gita concept or verse "${query}" in simple terms, suitable for a modern reader. Focus on its core meaning and practical implications. If it's a verse, provide a concise summary of its teaching.`;
+                    let chatHistory = [];
+                    chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                    const payload = { contents: chatHistory };
+                    const apiKey = "";
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        insightOutput.innerHTML = `<p>${text}</p>`;
+                    } else {
+                        insightOutput.innerHTML = '<p class="text-red-600">Could not generate insight. Please try again or rephrase your query.</p>';
+                    }
+                } catch (error) {
+                    console.error('Error fetching Gemini API:', error);
+                    insightOutput.innerHTML = `<p class="text-red-600">An error occurred: ${error.message}. Please try again.</p>`;
+                } finally {
+                    getInsightButton.disabled = false;
+                }
+            });
+
+            renderGrid(resources);
+            generateChartData();
+        });
+    </script>
+</body>
+</html>
